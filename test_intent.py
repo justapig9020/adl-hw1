@@ -3,6 +3,8 @@ import pickle
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict
+from torch.utils.data import DataLoader
+import pandas as pd
 
 import torch
 
@@ -10,8 +12,11 @@ from dataset import SeqClsDataset
 from model import SeqClassifier
 from utils import Vocab
 
+def max_index(tensor):
+    return torch.max(tensor, -1)[1]
 
 def main(args):
+    device = args.device
     with open(args.cache_dir / "vocab.pkl", "rb") as f:
         vocab: Vocab = pickle.load(f)
 
@@ -19,27 +24,28 @@ def main(args):
     intent2idx: Dict[str, int] = json.loads(intent_idx_path.read_text())
 
     data = json.loads(args.test_file.read_text())
+    for d in data:
+        d['text'] = d['text'].split()
     dataset = SeqClsDataset(data, vocab, intent2idx, args.max_len)
-    # TODO: crecate DataLoader for test dataset
+    test_data = DataLoader(
+        dataset,
+        batch_size = args.batch_size,
+        collate_fn = dataset.collate_fn,
+        num_workers = args.num_workers)
 
-    embeddings = torch.load(args.cache_dir / "embeddings.pt")
+    model = torch.load(args.ckpt_path)
+    model.to(device)
 
-    model = SeqClassifier(
-        embeddings,
-        args.hidden_size,
-        args.num_layers,
-        args.dropout,
-        args.bidirectional,
-        dataset.num_classes,
-    )
-    model.eval()
-
-    ckpt = torch.load(args.ckpt_path)
+    result = []
+    for data in test_data:
+        data['text'] = data['text'].to(device)
+        id = data['id']
+        output = model(data)
+        pred = max_index(output)
+        result += [{"id": i, "intent": dataset.idx2label(p.item())} for i, p in zip(id, pred)]
     # load weights into model
-
-    # TODO: predict dataset
-
-    # TODO: write prediction to file (args.pred_file)
+    df = pd.DataFrame(result)
+    df.to_csv(args.pred_file, index=False)
 
 
 def parse_args() -> Namespace:
@@ -79,6 +85,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cpu"
     )
+    parser.add_argument("--num_workers", type=int, default=8)
     args = parser.parse_args()
     return args
 

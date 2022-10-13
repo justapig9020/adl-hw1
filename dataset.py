@@ -1,5 +1,6 @@
 from typing import List, Dict
 
+import torch
 from torch.utils.data import Dataset
 
 from utils import Vocab
@@ -31,8 +32,28 @@ class SeqClsDataset(Dataset):
         return len(self.label_mapping)
 
     def collate_fn(self, samples: List[Dict]) -> Dict:
-        # TODO: implement collate_fn
-        raise NotImplementedError
+        """
+        The data will end up with 3 ~ 4 keys: 
+            - 'text'
+            - 'len'
+            - 'intent'
+            - 'id'
+        Each of the keys contents a list or tensor that contents data of each training / evaluation instances
+        """
+        data = {} 
+
+        texts = [sample['text'] for sample in samples]
+        # Encode texts to corresponding id and do padding
+        data['text'] = torch.tensor(self.vocab.encode_batch(texts))
+        data['len'] = torch.tensor([len(text) for text in texts])
+        data['id'] = [sample['id'] for sample in samples]
+
+        # Since testing data does not content 'intent', we have to check for it
+        if 'intent' in samples[0].keys():
+            labels = [sample['intent'] for sample in samples]
+            data['intent'] = torch.tensor([self.label2idx(label) for label in labels])
+        return data
+
 
     def label2idx(self, label: str):
         return self.label_mapping[label]
