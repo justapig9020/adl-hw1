@@ -4,6 +4,7 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict
 
+import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -14,9 +15,32 @@ from utils import Vocab
 
 
 def main(args):
-    # TODO: implement main function
-    raise NotImplementedError
+    device = args.device
 
+    with open(args.cache_dir / "vocab.pkl", "rb") as f:
+        vocab: Vocab = pickle.load(f)
+    
+    tag_idx_path = args.cache_dir / "tag2idx.json"
+    tag2idx: Dict[str, int] = json.loads(tag_idx_path.read_text())
+
+    data = json.loads(args.test_file.read_text())
+    dataset = SeqTaggingClsDataset(data, vocab, tag2idx, args.max_len)
+    test_loader = DataLoader(dataset, batch_size=args.batch_size, num_workers=8, collate_fn=dataset.collate_fn)
+    path = args.ckpt_dir
+    print(path)
+    model = torch.load(path)
+    model.eval()
+    model.to(device)
+    result = []
+    for data in test_loader:
+        data['tokens'] = data['tokens'].to(device)
+        id = data['id']
+        lens = data['len']
+        output = model(data)
+        pred = torch.max(output, -1)[1]
+        result += [{'id': i, 'tags': ' '.join([dataset.idx2label(token.item()) for token in tokens[:len]])} for i, len, tokens in zip(id, lens, pred)]
+    df = pd.DataFrame(result)
+    df.to_csv(args.pred_file, index=False)
 
 def parse_args() -> Namespace:
     parser = ArgumentParser()
@@ -39,6 +63,7 @@ def parse_args() -> Namespace:
         default="./ckpt/slot/",
     )
     parser.add_argument("--pred_file", type=Path, default="pred.slot.csv")
+    parser.add_argument("--test_file", type=Path, required=True)
 
     # data
     parser.add_argument("--max_len", type=int, default=128)
@@ -53,7 +78,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--batch_size", type=int, default=128)
 
     parser.add_argument(
-        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cpu"
+        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
     )
     args = parser.parse_args()
     return args

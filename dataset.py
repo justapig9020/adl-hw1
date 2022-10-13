@@ -3,7 +3,7 @@ from typing import List, Dict
 import torch
 from torch.utils.data import Dataset
 
-from utils import Vocab
+from utils import Vocab, pad_to_len
 
 
 class SeqClsDataset(Dataset):
@@ -59,12 +59,36 @@ class SeqClsDataset(Dataset):
         return self.label_mapping[label]
 
     def idx2label(self, idx: int):
-        return self._idx2label[idx]
+        if idx in self._idx2label.keys():
+            return self._idx2label[idx]
+        else:
+            return '[UNK]'
 
 
 class SeqTaggingClsDataset(SeqClsDataset):
     ignore_idx = -100
 
     def collate_fn(self, samples):
-        # TODO: implement collate_fn
-        raise NotImplementedError
+        """
+        The data will end up with 3 ~ 4 keys: 
+            - 'tokens'
+            - 'len'
+            - 'tags'
+            - 'id'
+        Each of the keys contents a list or tensor that contents data of each training / evaluation instances
+        """
+        data = {} 
+
+        tokens = [sample['tokens'] for sample in samples]
+        # Encode texts to corresponding id and do padding
+        data['tokens'] = torch.tensor(self.vocab.encode_batch(tokens))
+        data['len'] = torch.tensor([len(token) for token in tokens])
+        data['id'] = [sample['id'] for sample in samples]
+
+        # Since testing data does not content 'intent', we have to check for it
+        if 'tags' in samples[0].keys():
+            tags = [sample['tags'] for sample in samples]
+            to_len = max(data['len'])
+            tags = [[self.label2idx(t) for t in tag] for tag in tags]
+            data['tags'] = torch.tensor(pad_to_len(tags, to_len, self.num_classes))
+        return data

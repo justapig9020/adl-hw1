@@ -4,8 +4,11 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict
 
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import figure
 import torch
-from torch.optim import Adam
+from torch import nn
+from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader
 from tqdm import tqdm, trange
 
@@ -17,10 +20,194 @@ TRAIN = "train"
 DEV = "eval"
 SPLITS = [TRAIN, DEV]
 
+ACCURACY = 'acc'
+LOSS = 'loss'
+ITER = 'iter'
+
+class TrainingLogger:
+    def __init__(self, threshold):
+        self.log = {
+            TRAIN: {
+                ACCURACY: [],
+                LOSS: [],
+                ITER: [],
+            },
+            DEV: {
+                ACCURACY: [],
+                LOSS: [],
+                ITER: [],
+            }
+        }
+        self.best_loss = None
+        self.non_decrease_cnt = 0
+        self.threshold = threshold
+        self.new_record = False
+    def record(self, type: str, result: Dict, iter: int):
+        self.log[type][ACCURACY].append(result[ACCURACY])
+        self.log[type][LOSS].append(result[LOSS])
+        self.log[type][ITER].append(iter)
+        if type == DEV:
+            if self.best_loss is None or result[LOSS] >= self.best_loss:
+                self.best_loss = result[LOSS]
+                self.non_decrease_cnt += 1
+            else:
+                self.new_record = True
+                if self.non_decrease_cnt > 0:
+                    self.non_decrease_cnt -= 1
+    def is_new_record(self) -> bool:
+        ret = self.new_record
+        self.new_record = False
+        return ret
+    def early_return(self) -> bool:
+        return self.non_decrease_cnt >= self.threshold
+
+def plotter(name, logger: TrainingLogger):
+    targets = [LOSS, ACCURACY]
+    axs = (plt.figure(constrained_layout = True).subplots(1, len(targets), sharex = True, sharey = True))
+    for target, ax in zip(targets, axs):
+        ax.set_title(target)
+        ax.set_ylabel(target.lower())
+        ax.set_xlabel('epoch')
+        ax.plot(logger.log[TRAIN][ITER], logger.log[TRAIN][target], '-', color = (1, 100 / 255, 100/ 255))
+        ax.plot(logger.log[DEV][ITER], logger.log[DEV][target], '--', color = (100 / 255, 1, 100/ 255))
+    plt.savefig(f"./plot/slot/{name}_{target}.png")
+    plt.clf()
+    plt.cla()
+    plt.close()
+
+def print_log(train, eval):
+    print(f'Train: accuracy {train[ACCURACY]:.03f}, loss {train[LOSS]:.03f}')
+    print(f'Eval: accuracy {eval[ACCURACY]:.03f}, loss {eval[LOSS]:.03f}')
+
+def init_dataset(args):
+    with open(args.cache_dir / 'vocab.pkl', 'rb') as f:
+        vocab: Vocab = pickle.load(f)
+    tag_idx_path = args.cache_dir / 'tag2idx.json'
+    tag2idx = json.loads(tag_idx_path.read_text())
+    data_paths = {split: args.data_dir / f"{split}.json" for split in SPLITS}
+    data = {split: json.loads(path.read_text()) for split, path in data_paths.items()}
+    datasets = {
+        split: SeqTaggingClsDataset(split_data, vocab, tag2idx, args.max_len)
+        for split, split_data in data.items()
+    }
+    train_data = DataLoader(
+        dataset = datasets[TRAIN],
+        batch_size = args.batch_size,
+        shuffle = True,
+        num_workers = args.num_workers,
+        collate_fn = datasets[TRAIN].collate_fn)
+    eval_data = DataLoader(
+        dataset = datasets[DEV],
+        batch_size = args.batch_size,
+        shuffle = True,
+        num_workers = args.num_workers,
+        collate_fn = datasets[DEV].collate_fn)
+    return datasets[TRAIN].num_classes + 1, train_data, eval_data
+
+def init_model(args, num_classes):
+    embeddings = torch.load(args.cache_dir / 'embeddings.pt')
+    model = SeqTagger(
+        embeddings = embeddings,
+        hidden_size = args.hidden_size,
+        num_layers = args.num_layers,
+        dropout = args.dropout,
+        bidirectional = args.bidirectional,
+        num_class = num_classes
+    )
+    return model
+
+def max_index(tensor):
+    return torch.max(tensor, -1)[1]
+
+def correct_count(classes, label):
+    seqs = torch.all(classes == label, dim = -1)
+    return seqs.float().sum().item()
+
+def do_epoch(device, model, dataset, loss_fn, optimizer = None):
+    training = optimizer is not None
+    if training:
+        model.train()
+    else:
+        model.eval()
+
+    correct = 0
+    total = 0
+    sum_loss = 0.0
+    for data in dataset:
+        label = data['tags'].to(device)
+        batch_size = label.shape[0]
+        data['tokens'] = data['tokens'].to(device)
+        # Forward
+        output = model(data)
+        reshape_output = torch.reshape(output, (-1, model.num_class))
+        reshape_label = torch.reshape(label, (-1, ))
+        # Loss
+        loss = loss_fn(reshape_output, reshape_label) 
+
+        sum_loss += loss.item() * batch_size
+
+        if training:
+            optimizer.zero_grad()
+            # Backward
+            loss.backward()
+            # Optimize
+            optimizer.step()
+        
+        classes = max_index(output)
+        correct += correct_count(classes, label)
+        total += batch_size
+    result = {
+        LOSS: sum_loss / total,
+        ACCURACY: correct / total,
+    }
+    return result
 
 def main(args):
-    # TODO: implement main function
-    raise NotImplementedError
+    device = args.device
+    model_name = f"{args.name}_{args.hidden_size}_{args.num_layers}_{args.dropout}_{args.lr}"
+    save_path = args.ckpt_dir / f"{model_name}.pt"
+
+    # Initialization
+    num_classes, train_data, eval_data = init_dataset(args)
+
+    model = init_model(args, num_classes)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = AdamW(model.parameters(), lr = args.lr, weight_decay = 1)
+
+    model.to(device)
+    loss_fn.to(device)
+
+    # Init loggers
+    logger = TrainingLogger(args.early_return)
+
+    # Start training
+    epoch_pbar = trange(args.num_epoch, desc="Epoch")
+    for i, epoch in enumerate(epoch_pbar):
+        train_result = do_epoch(
+            device = device,
+            model = model,
+            dataset = train_data,
+            loss_fn = loss_fn,
+            optimizer = optimizer, 
+        )
+        logger.record(TRAIN, train_result, i)
+
+        eval_result = do_epoch(
+            device = device,
+            model = model,
+            dataset = eval_data,
+            loss_fn = loss_fn,
+        )
+        logger.record(DEV, eval_result, i)
+        if logger.is_new_record():
+            torch.save(model, save_path)
+
+        if i % 5 == 0:
+            print_log(train_result, eval_result)
+            plotter(model_name, logger)
+
+        if logger.early_return():
+            return
 
 
 def parse_args() -> Namespace:
@@ -43,6 +230,11 @@ def parse_args() -> Namespace:
         help="Directory to save the model file.",
         default="./ckpt/slot/",
     )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=""
+    )
 
     # data
     parser.add_argument("--max_len", type=int, default=128)
@@ -58,12 +250,14 @@ def parse_args() -> Namespace:
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--num_workers", type=int, default=8)
 
     # training
     parser.add_argument(
-        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cpu"
+        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
     )
-    parser.add_argument("--num_epoch", type=int, default=100)
+    parser.add_argument("--num_epoch", type=int, default=10000)
+    parser.add_argument("--early_return", type=int, default=50)
 
     args = parser.parse_args()
     return args

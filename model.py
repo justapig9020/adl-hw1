@@ -17,16 +17,17 @@ class SeqClassifier(torch.nn.Module):
     ) -> None:
         super(SeqClassifier, self).__init__()
         self.embed = Embedding.from_pretrained(embeddings, freeze=False)
+        self.rnn_output_dim = self.embed.embedding_dim
         self.rnn = LSTM(
-            input_size = self.embed.embedding_dim,
+            input_size = self.rnn_output_dim,
             hidden_size = hidden_size,
             num_layers = num_layers,
             dropout = dropout,
             bidirectional = bidirectional,
             batch_first = True,
+            proj_size = self.rnn_output_dim
         )
-        self.fc = Linear(hidden_size, num_class)
-        self.rnn_output_dim = hidden_size
+        self.fc = Linear(self.rnn_output_dim, num_class)
         self.num_class = num_class
         self.sm = Softmax(dim=-1)
 
@@ -34,7 +35,7 @@ class SeqClassifier(torch.nn.Module):
     def encoder_output_size(self) -> int:
         return self.embed.embedding_dim
 
-    def forward(self, batch) -> Dict[str, torch.Tensor]:
+    def forward(self, batch):
         text = batch['text']
         lens = batch['len']
         ev = self.embed(text)
@@ -48,6 +49,12 @@ class SeqClassifier(torch.nn.Module):
 
 
 class SeqTagger(SeqClassifier):
-    def forward(self, batch) -> Dict[str, torch.Tensor]:
-        # TODO: implement model forward
-        raise NotImplementedError
+    def forward(self, batch):
+        text = batch['tokens']
+        len = batch['len']
+        ev = self.embed(text)
+        enc, _ = self.rnn(ev)
+        # dec, _ = self.rnn(enc[:, :, :self.rnn_output_dim])
+        output = self.fc(enc[:, :, :self.rnn_output_dim])
+        output = self.sm(output)
+        return output
