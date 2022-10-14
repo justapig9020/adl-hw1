@@ -20,3 +20,13 @@ bash preprocess.sh
 ```shell
 python train_intent.py
 ```
+## Reproduce
+### intent
+```shell
+python3 train_intent.py
+```
+
+### slot
+```shell
+python3 train_slot.py
+```
