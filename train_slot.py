@@ -67,16 +67,19 @@ class TrainingLogger:
 
 def plotter(name, logger: TrainingLogger):
     targets = [LOSS, ACCURACY, TOKEN_ACC]
-    axs = (plt.figure(constrained_layout = True).subplots(1, len(targets), sharex = True, sharey = True))
+    axs = (plt.figure(constrained_layout = True, figsize=(12, 6)).subplots(1, len(targets), sharex = False, sharey = False))
     for target, ax in zip(targets, axs):
+        if 'acc' in target:
+            ax.set_ylim([0, 1])
         ax.set_title(target)
         ax.set_ylabel(target.lower())
         ax.set_xlabel('epoch')
-        ax.plot(logger.log[TRAIN][ITER], logger.log[TRAIN][target], '-', color = (1, 100 / 255, 100/ 255))
-        ax.plot(logger.log[DEV][ITER], logger.log[DEV][target], '--', color = (100 / 255, 1, 100/ 255))
+        ax.plot(logger.log[TRAIN][ITER], logger.log[TRAIN][target], '-', color = (1, 100 / 255, 100/ 255), label = 'Train')
+        ax.plot(logger.log[DEV][ITER], logger.log[DEV][target], '--', color = (100 / 255, 1, 100/ 255), label = 'Eval')
+        ax.legend()
     plt.savefig(f"./plot/slot/{name}.png")
-    plt.clf()
     plt.cla()
+    plt.clf()
     plt.close()
 
 def print_log(train, eval):
