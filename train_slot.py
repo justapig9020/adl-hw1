@@ -251,7 +251,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--name",
         type=str,
-        default=""
+        default="GRU"
     )
 
     # data

@@ -1,7 +1,7 @@
 from typing import Dict
 
 import torch
-from torch.nn import Embedding, LSTM, Linear, Softmax
+from torch.nn import Embedding, LSTM, Linear, Softmax, GRU
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
@@ -17,17 +17,17 @@ class SeqClassifier(torch.nn.Module):
     ) -> None:
         super(SeqClassifier, self).__init__()
         self.embed = Embedding.from_pretrained(embeddings, freeze=False)
-        self.rnn_output_dim = self.embed.embedding_dim
-        self.rnn = LSTM(
-            input_size = self.rnn_output_dim,
-            hidden_size = hidden_size,
+        self.rnn_input_dim = self.embed.embedding_dim
+        self.rnn_output_dim = hidden_size
+        self.rnn = GRU(
+            input_size = self.rnn_input_dim,
+            hidden_size = self.rnn_output_dim,
             num_layers = num_layers,
             dropout = dropout,
             bidirectional = bidirectional,
             batch_first = True,
-            proj_size = self.rnn_output_dim
         )
-        self.fc = Linear(self.rnn_output_dim, num_class)
+        self.fc = Linear(self.rnn_input_dim, num_class)
         self.num_class = num_class
         self.sm = Softmax(dim=-1)
 
@@ -55,6 +55,6 @@ class SeqTagger(SeqClassifier):
         ev = self.embed(text)
         enc, _ = self.rnn(ev)
         # dec, _ = self.rnn(enc[:, :, :self.rnn_output_dim])
-        output = self.fc(enc[:, :, :self.rnn_output_dim])
+        output = self.fc(enc[:, :, :self.rnn_input_dim])
         output = self.sm(output)
         return output
