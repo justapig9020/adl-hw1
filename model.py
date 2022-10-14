@@ -8,6 +8,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 class SeqClassifier(torch.nn.Module):
     def __init__(
         self,
+        rnn: str,
         embeddings: torch.tensor,
         hidden_size: int,
         num_layers: int,
@@ -19,15 +20,27 @@ class SeqClassifier(torch.nn.Module):
         self.embed = Embedding.from_pretrained(embeddings, freeze=False)
         self.rnn_input_dim = self.embed.embedding_dim
         self.rnn_output_dim = hidden_size
-        self.rnn = GRU(
-            input_size = self.rnn_input_dim,
-            hidden_size = self.rnn_output_dim,
-            num_layers = num_layers,
-            dropout = dropout,
-            bidirectional = bidirectional,
-            batch_first = True,
-        )
-        self.fc = Linear(self.rnn_input_dim, num_class)
+        if rnn == 'GRU':
+            self.rnn = GRU(
+                input_size = self.rnn_input_dim,
+                hidden_size = self.rnn_output_dim,
+                num_layers = num_layers,
+                dropout = dropout,
+                bidirectional = bidirectional,
+                batch_first = True,
+            )
+        elif rnn == 'LSTM':
+            self.rnn = LSTM(
+                input_size = self.rnn_input_dim,
+                hidden_size = self.rnn_output_dim,
+                num_layers = num_layers,
+                dropout = dropout,
+                bidirectional = bidirectional,
+                batch_first = True,
+            )
+        else:
+            raise Exception('Unknow rnn')
+        self.fc = Linear(self.rnn_output_dim, num_class)
         self.num_class = num_class
         self.sm = Softmax(dim=-1)
 
@@ -55,6 +68,6 @@ class SeqTagger(SeqClassifier):
         ev = self.embed(text)
         enc, _ = self.rnn(ev)
         # dec, _ = self.rnn(enc[:, :, :self.rnn_output_dim])
-        output = self.fc(enc[:, :, :self.rnn_input_dim])
+        output = self.fc(enc[:, :, :self.rnn_output_dim])
         output = self.sm(output)
         return output

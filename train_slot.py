@@ -116,6 +116,7 @@ def init_dataset(args):
 def init_model(args, num_classes):
     embeddings = torch.load(args.cache_dir / 'embeddings.pt')
     model = SeqTagger(
+        rnn = args.rnn,
         embeddings = embeddings,
         hidden_size = args.hidden_size,
         num_layers = args.num_layers,
@@ -262,6 +263,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bidirectional", type=bool, default=True)
+    parser.add_argument("--rnn", type=str, default="GRU")
 
     # optimizer
     parser.add_argument("--lr", type=float, default=1e-3)
