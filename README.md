@@ -23,10 +23,21 @@ python train_intent.py
 ## Reproduce
 ### intent
 ```shell
-python3 train_intent.py
+python3 train_intent.py --data_dir ${data_dir} --cache_dir ${cache_dir} --ckpt_dir ${ckpt_dir} --num_workers ${num CPU cores} --device ${cude device}
 ```
 
 ### slot
 ```shell
-python3 train_slot.py
+python3 train_slot.py --data_dir ${data_dir} --cache_dir ${cache_dir} --ckpt_dir ${ckpt_dir} --num_workers ${num CPU cores} --device ${cude device}
+```
+
+### seqeval
+```shell
+python3 eval_slot.py --test_file ${test file} --data_dir ${data_dir} --cache_dir ${cache_dir} --ckpt_dir ${model.pt} --device ${device}
+```
+
+## Inference
+First download the models
+```shell
+bash ./download.sh
 ```

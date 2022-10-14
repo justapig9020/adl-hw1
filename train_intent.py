@@ -260,7 +260,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
     )
-    parser.add_argument("--num_epoch", type=int, default=10000)
+    parser.add_argument("--num_epoch", type=int, default=1000)
     parser.add_argument("--early_return", type=int, default=50)
 
     args = parser.parse_args()
