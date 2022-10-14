@@ -71,6 +71,8 @@ def plotter(name, logger: TrainingLogger):
     for target, ax in zip(targets, axs):
         if 'acc' in target:
             ax.set_ylim([0, 1])
+            m = max(logger.log[DEV][target])
+            ax.axhline(y=m, label=f"eval max = {m:.03f}")
         ax.set_title(target)
         ax.set_ylabel(target.lower())
         ax.set_xlabel('epoch')
@@ -272,7 +274,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda:0"
     )
-    parser.add_argument("--num_epoch", type=int, default=10000)
+    parser.add_argument("--num_epoch", type=int, default=500)
     parser.add_argument("--early_return", type=int, default=50)
 
     args = parser.parse_args()
