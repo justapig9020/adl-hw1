@@ -40,6 +40,8 @@ def main(args):
     model.to(device)
 
     result = []
+    correct = 0
+    total = 0
     for data in test_data:
         label = data['intent'].to(device)
         batch_size = label.shape[0]
