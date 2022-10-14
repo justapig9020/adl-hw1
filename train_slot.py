@@ -23,6 +23,7 @@ SPLITS = [TRAIN, DEV]
 ACCURACY = 'acc'
 LOSS = 'loss'
 ITER = 'iter'
+TOKEN_ACC = 'token_acc'
 
 class TrainingLogger:
     def __init__(self, threshold):
@@ -30,11 +31,13 @@ class TrainingLogger:
             TRAIN: {
                 ACCURACY: [],
                 LOSS: [],
+                TOKEN_ACC: [],
                 ITER: [],
             },
             DEV: {
                 ACCURACY: [],
                 LOSS: [],
+                TOKEN_ACC: [],
                 ITER: [],
             }
         }
@@ -46,6 +49,7 @@ class TrainingLogger:
         self.log[type][ACCURACY].append(result[ACCURACY])
         self.log[type][LOSS].append(result[LOSS])
         self.log[type][ITER].append(iter)
+        self.log[type][TOKEN_ACC].append(result[TOKEN_ACC])
         if type == DEV:
             if self.best_loss is None or result[LOSS] >= self.best_loss:
                 self.best_loss = result[LOSS]
@@ -62,7 +66,7 @@ class TrainingLogger:
         return self.non_decrease_cnt >= self.threshold
 
 def plotter(name, logger: TrainingLogger):
-    targets = [LOSS, ACCURACY]
+    targets = [LOSS, ACCURACY, TOKEN_ACC]
     axs = (plt.figure(constrained_layout = True).subplots(1, len(targets), sharex = True, sharey = True))
     for target, ax in zip(targets, axs):
         ax.set_title(target)
@@ -70,7 +74,7 @@ def plotter(name, logger: TrainingLogger):
         ax.set_xlabel('epoch')
         ax.plot(logger.log[TRAIN][ITER], logger.log[TRAIN][target], '-', color = (1, 100 / 255, 100/ 255))
         ax.plot(logger.log[DEV][ITER], logger.log[DEV][target], '--', color = (100 / 255, 1, 100/ 255))
-    plt.savefig(f"./plot/slot/{name}_{target}.png")
+    plt.savefig(f"./plot/slot/{name}.png")
     plt.clf()
     plt.cla()
     plt.close()
@@ -119,6 +123,9 @@ def init_model(args, num_classes):
 def max_index(tensor):
     return torch.max(tensor, -1)[1]
 
+def token_correct_count(classes, label):
+    return (classes == label).float().sum().item()
+
 def correct_count(classes, label):
     seqs = torch.all(classes == label, dim = -1)
     return seqs.float().sum().item()
@@ -130,19 +137,22 @@ def do_epoch(device, model, dataset, loss_fn, optimizer = None):
     else:
         model.eval()
 
+    token_acc = 0
     correct = 0
-    total = 0
+    total_seq = 0
+    total_token = 0
     sum_loss = 0.0
     for data in dataset:
         label = data['tags'].to(device)
         batch_size = label.shape[0]
+        seq_len = label.shape[1]
         data['tokens'] = data['tokens'].to(device)
         # Forward
         output = model(data)
+        # Loss
         reshape_output = torch.reshape(output, (-1, model.num_class))
         reshape_label = torch.reshape(label, (-1, ))
-        # Loss
-        loss = loss_fn(reshape_output, reshape_label) 
+        loss = loss_fn(reshape_output, reshape_label)
 
         sum_loss += loss.item() * batch_size
 
@@ -155,10 +165,13 @@ def do_epoch(device, model, dataset, loss_fn, optimizer = None):
         
         classes = max_index(output)
         correct += correct_count(classes, label)
-        total += batch_size
+        token_acc += token_correct_count(classes, label)
+        total_seq += batch_size
+        total_token += batch_size * seq_len
     result = {
-        LOSS: sum_loss / total,
-        ACCURACY: correct / total,
+        LOSS: sum_loss / total_seq,
+        ACCURACY: correct / total_seq,
+        TOKEN_ACC: token_acc / total_token,
     }
     return result
 
@@ -205,7 +218,7 @@ def main(args):
         if i % 5 == 0:
             print_log(train_result, eval_result)
             plotter(model_name, logger)
-
+            print(f'token acc {train_result["token_acc"] = }, {eval_result["token_acc"] = }')
         if logger.early_return():
             return
 
