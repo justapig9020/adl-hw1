@@ -250,7 +250,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--rnn", type=str, default="LSTM")
 
     # optimizer
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=1e-3)
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)
