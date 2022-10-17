@@ -52,7 +52,7 @@ output:
     
     - performance of your model. (public score on kaggle)
     
-        0.87644
+       0.88977
 
     - the loss function you used.
         
@@ -83,7 +83,7 @@ output:
         
     - performance of your model. (public score on kaggle)
     
-        0.73887
+        0.77908
 
         
     - the loss function you used.
@@ -107,9 +107,6 @@ output:
         date       0.73      0.71      0.72       206
   first_name       0.90      0.81      0.86       102
    last_name       0.81      0.67      0.73        78
-      people       0.73      0.73      0.73       238
-        time       0.83      0.86      0.84       218
-
    micro avg       0.78      0.76      0.77       842
    macro avg       0.80      0.76      0.78       842
 weighted avg       0.78      0.76      0.77       842
@@ -117,9 +114,20 @@ weighted avg       0.78      0.76      0.77       842
 
 - Explain the differences between the evaluation method in seqeval, token accuracy, and joint accuracy.
 
-    - seqeval: 比較每個 tag 出來的片段，並計算片段預測的正確率。
-    - token accuracy: 以 token 為單位計算正確率。
-    - joint accuracy: 以句子為單位，只要句子中出現任何錯誤就被視為是錯誤的。
+    - seqeval:
+
+        比較每個 tag 出來的片段，並計算片段預測的正確率。
+        推測此方法較適用於評斷語意分析的結果。
+    
+    - token accuracy:
+    
+        以 token 為單位計算正確率。
+        推測此方法較適用於評斷 classification 問題的結果。
+
+    - joint accuracy:
+    
+        以句子為單位，只要句子中出現任何錯誤就被視為是錯誤的。
+        推測此方法較適用於評斷結果需要完全一致的狀況。
 \pagebreak
 
 ### Q5 Compare with different configurations
