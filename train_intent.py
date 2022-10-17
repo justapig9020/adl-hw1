@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from typing import Tuple
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 from torch import nn
@@ -106,6 +106,7 @@ class TrainingLogger:
     def early_return(self) -> bool:
         return self.non_decrease_cnt >= self.threshold
 
+"""
 def plotter(name, logger: TrainingLogger):
     targets = [LOSS, ACCURACY]
     for target in targets:
@@ -117,6 +118,7 @@ def plotter(name, logger: TrainingLogger):
         plt.savefig(f"./plot/intent/{name}_{target}.png")
         plt.clf()
         plt.cla()
+"""
 
 def print_log(train, eval):
     print(f'Train: accuracy {train[ACCURACY]:.03f}, loss {train[LOSS]:.03f}')
@@ -207,7 +209,7 @@ def main(args: Namespace):
 
         if i % 5 == 0:
             print_log(train_result, eval_result)
-            plotter(model_name, logger)
+            # plotter(model_name, logger)
             if logger.early_return():
                 return
 

@@ -4,8 +4,10 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict
 
+"""
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import figure
+"""
 import torch
 from torch import nn
 from torch.optim import Adam, AdamW
@@ -65,6 +67,7 @@ class TrainingLogger:
     def early_return(self) -> bool:
         return self.non_decrease_cnt >= self.threshold
 
+"""
 def plotter(name, logger: TrainingLogger):
     targets = [LOSS, ACCURACY, TOKEN_ACC]
     axs = (plt.figure(constrained_layout = True, figsize=(12, 6)).subplots(1, len(targets), sharex = False, sharey = False))
@@ -83,6 +86,7 @@ def plotter(name, logger: TrainingLogger):
     plt.cla()
     plt.clf()
     plt.close()
+"""
 
 def print_log(train, eval):
     print(f'Train: accuracy {train[ACCURACY]:.03f}, loss {train[LOSS]:.03f}')
@@ -223,7 +227,7 @@ def main(args):
 
         if i % 5 == 0:
             print_log(train_result, eval_result)
-            plotter(model_name, logger)
+            # plotter(model_name, logger)
             print(f'token acc {train_result["token_acc"] = }, {eval_result["token_acc"] = }')
         if logger.early_return():
             return
