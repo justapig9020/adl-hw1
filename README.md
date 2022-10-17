@@ -41,3 +41,12 @@ First download the models
 ```shell
 bash ./download.sh
 ```
+### intent
+```shell
+bash ./intent_cls.sh ${path_to_test.json} ${path_to_pred.csc}
+```
+
+### slot
+```shell
+bash ./slot_tag.sh ${path_to_test.json} ${path_to_pred.csc}
+```
